@@ -72,19 +72,23 @@ stats_generales = conn.execute("""
     SELECT 
         COUNT(*) as total_client,
         count(distinct Location) as ville,
-        avg(Age) as moyenne_age
+        count(distinct "Item Purchased") as article,
+        round(avg(Age),1) as moyenne_age
     FROM shopping
 """).fetchdf()
 
-col1, col2, col3 = st.columns(3)
+
+col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Client", stats_generales['total_client'][0])
 col2.metric("Ville", stats_generales['ville'][0])
-col3.metric("Moyenne Age", f"{stats_generales['moyenne_age'][0]}%")
+col3.metric("Moyenne Age", f"{stats_generales['moyenne_age'][0]}")
+col4.metric("Nombre Article", f"{stats_generales['article'][0]}")
 
-# Créer les deux graphiques demandés
+
+# Créer des graphiques
 st.header("Analyse des clients")
 
-# 1. Graphique du nombre de survivants par sexe
+# 1. Graphique du nombre de clients par sexe
 client_par_sexe = conn.execute("""
     SELECT 
         Gender,
@@ -163,3 +167,60 @@ with col2:
     )
     
     st.plotly_chart(fig1, use_container_width=True)
+
+
+Montant_par_article = conn.execute("""
+    SELECT 
+         "Item Purchased",
+        sum("Purchase Amount (USD)") Montant   
+    FROM shopping
+    GROUP BY "Item Purchased"
+    ORDER BY "Item Purchased"
+""").fetchdf()
+
+
+# Ajouter des statistiques
+Montant_par_article = conn.execute("""
+    SELECT 
+         "Item Purchased" Article,
+        sum("Purchase Amount (USD)") Montant,   
+        round(avg("Purchase Amount (USD)"),2) Panier_Moyen
+    FROM shopping 
+    GROUP BY "Item Purchased"
+    ORDER BY "Item Purchased limit 15"
+""").fetchdf()
+    
+st.write("Montant_par_article :")
+for index, row  in Montant_par_article.iterrows():
+        st.write(f"- {row['Article']}: {row['Montant'],row['Panier_Moyen']}%")
+
+
+
+
+# Sélecteur de ville
+villes = df["Location"].unique()
+ville_selectionnee = st.selectbox("Choisissez une ville :", villes)
+
+
+# Filtrer les données
+df_ville = df[df["Location"] == ville_selectionnee]
+
+nb_clients = len(df_ville)
+nb_femmes = len(df_ville[df_ville["Gender"] == "Female"])
+nb_hommes = len(df_ville[df_ville["Gender"] == "Male"])
+age_moyen = df_ville["Age"].mean()
+panier_moyen = df_ville["Purchase Amount (USD)"].mean()
+
+
+# Affichage
+st.subheader(f"📍 Statistiques pour {ville_selectionnee}")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("👥 Nombre de clients", nb_clients)
+col1.metric("👩 Nombre de femmes", nb_femmes)
+col1.metric("👨 Nombre d'hommes", nb_hommes)
+
+col2.metric("🎂 Âge moyen", round(age_moyen, 1))
+col2.metric("🛒 Panier moyen (€)", round(panier_moyen, 2))
+
